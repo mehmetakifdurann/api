@@ -28,40 +28,50 @@ namespace FtpWebApiProject.Services
             _settings = options.Value;
         }
 
-        // DÜZELTME BURADA YAPILDI:
+        // FTP client oluşturma
         private AsyncFtpClient CreateClient()
         {
-            var client = new AsyncFtpClient(_settings.Host, _settings.User, _settings.Password, _settings.Port);
-            
-            // Config nesnesi oluşturuluyor
+            var client = new AsyncFtpClient(
+                _settings.Host,
+                _settings.User,
+                _settings.Password,
+                _settings.Port
+            );
+
             client.Config.ConnectTimeout = 15000;
             client.Config.ReadTimeout = 15000;
-            
-            // Pasif mod ayarı için bu satırı kaldırdık (Varsayılan zaten Pasif'tir)
-            // Eğer mutlaka belirtmek gerekirse Connect metodunda yapılır ama FluentFTP otomatiktir.
-            // İlla zorlamak için eski versiyonlardaki kod yerine şu anki config yapısı yeterlidir.
-            
+
+            // Gerekirse şifreleme modu açıkça belirtilebilir:
+            // client.Config.EncryptionMode = FtpEncryptionMode.None;
+
             return client;
         }
 
+        // UPLOAD
         public async Task<bool> UploadFileAsync(IFormFile file, string remotePath)
         {
             using var client = CreateClient();
-            // AutoConnect, en iyi bağlantı modunu (Pasif/Aktif) kendisi dener ve bulur.
-            await client.AutoConnect(); 
-            
-            if (!remotePath.EndsWith("/")) remotePath += "/";
+            await client.AutoConnect();
+
+            if (!remotePath.EndsWith("/"))
+                remotePath += "/";
+
             string fullPath = remotePath + file.FileName;
 
             using var stream = file.OpenReadStream();
-            try 
+            try
             {
-                await client.UploadStream(stream, fullPath, FtpRemoteExists.Overwrite, true);
+                await client.UploadStream(
+                    stream,
+                    fullPath,
+                    FtpRemoteExists.Overwrite,
+                    true
+                );
                 return true;
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Upload Hatası: " + ex.Message);
+                Console.WriteLine($"Upload Hatası (FTP): {ex.Message}");
                 return false;
             }
             finally
@@ -70,18 +80,17 @@ namespace FtpWebApiProject.Services
             }
         }
 
+        // LIST
         public async Task<List<FtpFileItem>> ListFilesAsync(string remotePath)
         {
             using var client = CreateClient();
-            // AutoConnect kullanımı hayat kurtarır (DriveHQ için en iyisi)
             await client.AutoConnect();
-            
+
             var items = await client.GetListing(remotePath);
             var fileList = new List<FtpFileItem>();
 
             foreach (var item in items)
             {
-                // Tip kontrolü (Güncel FluentFTP sürümüne uygun)
                 if (item.Type == FtpObjectType.File)
                 {
                     fileList.Add(new FtpFileItem
@@ -93,24 +102,28 @@ namespace FtpWebApiProject.Services
                     });
                 }
             }
-            
+
             await client.Disconnect();
             return fileList;
         }
 
+        // DOWNLOAD
         public async Task<byte[]?> DownloadFileAsync(string fileName)
         {
             using var client = CreateClient();
             await client.AutoConnect();
-            
-            try 
+
+            try
             {
-                if (!await client.FileExists(fileName)) return null;
+                if (!await client.FileExists(fileName))
+                    return null;
+
                 var bytes = await client.DownloadBytes(fileName, CancellationToken.None);
                 return bytes;
             }
-            catch
+            catch (Exception ex)
             {
+                Console.WriteLine($"Download Hatası (FTP): {ex.Message}");
                 return null;
             }
             finally
