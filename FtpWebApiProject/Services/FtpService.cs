@@ -1,16 +1,19 @@
 using FluentFTP;
 using Microsoft.Extensions.Options;
+using FtpWebApiProject.Models; // BU SATIR EKLENDİ (Hata Çözücü)
 
 namespace FtpWebApiProject.Services
 {
+    // Veri Modeli
     public class FtpFileItem
     {
         public string Name { get; set; } = string.Empty;
         public long Size { get; set; }
         public DateTime ModifiedDate { get; set; }
-        public bool IsFolder { get; set; } // Klasör mü kontrolü
+        public bool IsFolder { get; set; }
     }
 
+    // Interface Tanımı
     public interface IFtpService
     {
         Task<bool> UploadFileAsync(IFormFile file, string remotePath);
@@ -18,6 +21,7 @@ namespace FtpWebApiProject.Services
         Task<byte[]> DownloadFileAsync(string fileName);
     }
 
+    // Servis Sınıfı
     public class FtpService : IFtpService
     {
         private readonly FtpSettings _settings;
@@ -37,7 +41,6 @@ namespace FtpWebApiProject.Services
             using var client = CreateClient();
             await client.Connect();
             
-            // Yol düzeltme
             if (!remotePath.EndsWith("/")) remotePath += "/";
             string fullPath = remotePath + file.FileName;
 
@@ -63,14 +66,11 @@ namespace FtpWebApiProject.Services
             using var client = CreateClient();
             await client.Connect();
             
-            // Tüm listeyi al
             var items = await client.GetListing(remotePath);
-            
             var fileList = new List<FtpFileItem>();
 
             foreach (var item in items)
             {
-                // Sadece DOSYALARI al (Type == File)
                 if (item.Type == FtpFileSystemObjectType.File)
                 {
                     fileList.Add(new FtpFileItem
@@ -92,26 +92,14 @@ namespace FtpWebApiProject.Services
             using var client = CreateClient();
             await client.Connect();
             
-            Console.WriteLine($"İndirme İsteği Geldi: {fileName}");
-
             try 
             {
-                // Dosya var mı kontrol et
-                bool exists = await client.FileExists(fileName);
-                if (!exists) 
-                {
-                    Console.WriteLine("Dosya FTP'de bulunamadı!");
-                    return null;
-                }
-
-                // İndir
+                if (!await client.FileExists(fileName)) return null;
                 var bytes = await client.DownloadBytes(fileName, CancellationToken.None);
-                Console.WriteLine($"İndirme Başarılı: {bytes.Length} byte");
                 return bytes;
             }
-            catch (Exception ex)
+            catch
             {
-                Console.WriteLine("FTP İndirme Hatası: " + ex.Message);
                 return null;
             }
             finally
