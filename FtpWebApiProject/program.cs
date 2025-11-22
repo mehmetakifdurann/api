@@ -1,39 +1,39 @@
 using FtpWebApiProject.Services;
+using FtpWebApiProject.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. CORS Servisini Ekliyoruz (GitHub Pages'ın erişebilmesi için şart)
+// 1. CORS (İzin) Ayarı - Hepsini açıyoruz
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll",
-        builder =>
+        policy =>
         {
-            builder.AllowAnyOrigin()  // Kim gelirse gelsin kabul et (GitHub Pages vs.)
-                   .AllowAnyMethod()  // GET, POST, PUT hepsine izin ver
-                   .AllowAnyHeader(); // Tüm başlıklara izin ver
+            policy.AllowAnyOrigin()  // Her yerden gelen isteği kabul et
+                  .AllowAnyMethod()  // GET, POST hepsini kabul et
+                  .AllowAnyHeader(); // Tüm başlıkları kabul et
         });
 });
 
-// Servisleri ekle
+// Servisleri Ekle
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// *** BİZİM EKLEDİĞİMİZ KISIM ***
-// IFtpService istendiğinde FtpService ver diyoruz.
-builder.Services.AddScoped<IFtpService, FtpService>(); 
-// *******************************
+// FTP Servisini Ekle
+builder.Services.Configure<FtpSettings>(builder.Configuration.GetSection("FtpSettings"));
+builder.Services.AddScoped<IFtpService, FtpService>();
 
 var app = builder.Build();
 
-// 2. Swagger Ayarı (if koşulunu kaldırdık ki Render'da da açılsın)
+// Swagger (Her ortamda açık olsun)
 app.UseSwagger();
 app.UseSwaggerUI();
 
 app.UseHttpsRedirection();
 
-// 3. CORS Politikasını Devreye Al (Tam buraya yazılmalı!)
-app.UseCors("AllowAll");
+// 2. CORS Politikasını Devreye Al (Sırası Önemli!)
+app.UseCors("AllowAll"); 
 
 app.UseAuthorization();
 
