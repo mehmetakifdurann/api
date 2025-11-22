@@ -16,7 +16,6 @@ namespace FtpWebApiProject.Services
     {
         Task<bool> UploadFileAsync(IFormFile file, string remotePath);
         Task<List<FtpFileItem>> ListFilesAsync(string remotePath);
-        // DÜZELTME 1: byte[] yanına ? koyduk (Null dönebilir dedik)
         Task<byte[]?> DownloadFileAsync(string fileName);
     }
 
@@ -69,8 +68,8 @@ namespace FtpWebApiProject.Services
 
             foreach (var item in items)
             {
-                // DÜZELTME 2: Başına 'FluentFTP.' ekledik ki hatayı kessin
-                if (item.Type == FluentFTP.FtpFileSystemObjectType.File)
+                // DÜZELTME BURADA: FtpFileSystemObjectType yerine FtpObjectType kullanıldı
+                if (item.Type == FtpObjectType.File)
                 {
                     fileList.Add(new FtpFileItem
                     {
@@ -86,7 +85,6 @@ namespace FtpWebApiProject.Services
             return fileList;
         }
 
-        // DÜZELTME 3: Dönüş tipi nullable (byte[]?) yapıldı
         public async Task<byte[]?> DownloadFileAsync(string fileName)
         {
             using var client = CreateClient();
