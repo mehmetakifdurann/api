@@ -1,10 +1,9 @@
 using FluentFTP;
+using FtpWebApiProject.Models;
 using Microsoft.Extensions.Options;
-using FtpWebApiProject.Models; // BU SATIR EKLENDİ (Hata Çözücü)
 
 namespace FtpWebApiProject.Services
 {
-    // Veri Modeli
     public class FtpFileItem
     {
         public string Name { get; set; } = string.Empty;
@@ -13,15 +12,14 @@ namespace FtpWebApiProject.Services
         public bool IsFolder { get; set; }
     }
 
-    // Interface Tanımı
     public interface IFtpService
     {
         Task<bool> UploadFileAsync(IFormFile file, string remotePath);
         Task<List<FtpFileItem>> ListFilesAsync(string remotePath);
-        Task<byte[]> DownloadFileAsync(string fileName);
+        // DÜZELTME 1: byte[] yanına ? koyduk (Null dönebilir dedik)
+        Task<byte[]?> DownloadFileAsync(string fileName);
     }
 
-    // Servis Sınıfı
     public class FtpService : IFtpService
     {
         private readonly FtpSettings _settings;
@@ -71,7 +69,8 @@ namespace FtpWebApiProject.Services
 
             foreach (var item in items)
             {
-                if (item.Type == FtpFileSystemObjectType.File)
+                // DÜZELTME 2: Başına 'FluentFTP.' ekledik ki hatayı kessin
+                if (item.Type == FluentFTP.FtpFileSystemObjectType.File)
                 {
                     fileList.Add(new FtpFileItem
                     {
@@ -87,7 +86,8 @@ namespace FtpWebApiProject.Services
             return fileList;
         }
 
-        public async Task<byte[]> DownloadFileAsync(string fileName)
+        // DÜZELTME 3: Dönüş tipi nullable (byte[]?) yapıldı
+        public async Task<byte[]?> DownloadFileAsync(string fileName)
         {
             using var client = CreateClient();
             await client.Connect();
