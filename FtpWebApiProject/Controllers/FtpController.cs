@@ -1,5 +1,6 @@
 using FtpWebApiProject.Services;
 using Microsoft.AspNetCore.Mvc;
+using FtpWebApiProject.Models; // BU SATIR EKLENDİ (Hata Çözücü)
 
 namespace FtpWebApiProject.Controllers
 {
@@ -32,25 +33,15 @@ namespace FtpWebApiProject.Controllers
              return Ok(files);
         }
 
-        // İŞTE SORUNLU OLAN KISIM BURASIYDI
         [HttpGet("download")]
         public async Task<IActionResult> DownloadFile([FromQuery] string fileName)
         {
-            Console.WriteLine($"API Download Tetiklendi: {fileName}"); // Render Loglarında bunu göreceğiz
-
             if (string.IsNullOrEmpty(fileName)) return BadRequest("Dosya adı boş olamaz");
 
             var fileBytes = await _ftpService.DownloadFileAsync(fileName);
+            if (fileBytes == null) return NotFound("Dosya sunucuda bulunamadı.");
             
-            if (fileBytes == null) 
-            {
-                Console.WriteLine("Service null döndü, 404 atılıyor.");
-                return NotFound("Dosya sunucuda bulunamadı.");
-            }
-            
-            // Dosya türünü otomatik algıla
-            string contentType = "application/octet-stream"; // Varsayılan
-            return File(fileBytes, contentType, fileName);
+            return File(fileBytes, "application/octet-stream", fileName);
         }
     }
 }
