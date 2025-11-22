@@ -1,4 +1,3 @@
-using FtpWebApiProject.Models;
 using FtpWebApiProject.Services;
 using Microsoft.AspNetCore.Mvc;
 
@@ -20,29 +19,30 @@ namespace FtpWebApiProject.Controllers
         public async Task<IActionResult> UploadFile([FromForm] FileUploadModel model)
         {
             if (model.File == null || model.File.Length == 0)
-                return BadRequest("Lütfen geçerli bir dosya seçin.");
+                return BadRequest("Dosya seçilmedi.");
 
-            // Eğer hedef klasör belirtilmezse ana dizine atar
-            string targetFolder = string.IsNullOrEmpty(model.TargetPath) ? "/" : model.TargetPath;
-
-            var result = await _ftpService.UploadFileAsync(model.File, targetFolder);
-
-            if (result)
-            {
-                return Ok(new { message = "Dosya başarıyla FTP'ye yüklendi." });
-            }
-            else
-            {
-                return StatusCode(500, "Dosya yüklenirken bir hata oluştu.");
-            }
+            var result = await _ftpService.UploadFileAsync(model.File, "/");
+            if (result) return Ok(new { message = "Dosya yüklendi." });
+            return StatusCode(500, "Yükleme hatası.");
         }
-        
+
         // GET api/ftp/list
         [HttpGet("list")]
-        public async Task<IActionResult> ListFiles([FromQuery] string folder = "/")
+        public async Task<IActionResult> ListFiles()
         {
-             var files = await _ftpService.ListFilesAsync(folder);
+             var files = await _ftpService.ListFilesAsync("/");
              return Ok(files);
+        }
+
+        // YENİ EKLENEN KISIM: İNDİRME
+        [HttpGet("download")]
+        public async Task<IActionResult> DownloadFile([FromQuery] string fileName)
+        {
+            var fileBytes = await _ftpService.DownloadFileAsync(fileName);
+            if (fileBytes == null) return NotFound("Dosya bulunamadı.");
+            
+            // Dosyayı kullanıcıya gönder
+            return File(fileBytes, "application/octet-stream", fileName);
         }
     }
 }
