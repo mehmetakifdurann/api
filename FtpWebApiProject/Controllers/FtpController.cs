@@ -14,7 +14,6 @@ namespace FtpWebApiProject.Controllers
             _ftpService = ftpService;
         }
 
-        // POST api/ftp/upload
         [HttpPost("upload")]
         public async Task<IActionResult> UploadFile([FromForm] FileUploadModel model)
         {
@@ -26,22 +25,21 @@ namespace FtpWebApiProject.Controllers
             return StatusCode(500, "Yükleme hatası.");
         }
 
-        // GET api/ftp/list
         [HttpGet("list")]
         public async Task<IActionResult> ListFiles()
         {
+             // Artık detaylı obje listesi dönüyor
              var files = await _ftpService.ListFilesAsync("/");
              return Ok(files);
         }
 
-        // YENİ EKLENEN KISIM: İNDİRME
         [HttpGet("download")]
         public async Task<IActionResult> DownloadFile([FromQuery] string fileName)
         {
             var fileBytes = await _ftpService.DownloadFileAsync(fileName);
-            if (fileBytes == null) return NotFound("Dosya bulunamadı.");
+            if (fileBytes == null) return NotFound("Dosya bulunamadı veya bir klasör.");
             
-            // Dosyayı kullanıcıya gönder
+            // İndirme işlemi başlat
             return File(fileBytes, "application/octet-stream", fileName);
         }
     }
