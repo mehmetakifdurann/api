@@ -28,35 +28,34 @@ namespace FtpWebApiProject.Services
             _settings = options.Value;
         }
 
-        // BAĞLANTI AYARLARI BURADA YAPILIYOR
+        // DÜZELTME BURADA YAPILDI:
         private AsyncFtpClient CreateClient()
         {
             var client = new AsyncFtpClient(_settings.Host, _settings.User, _settings.Password, _settings.Port);
             
-            // ÖNEMLİ: DriveHQ ve Bulut sunucular için PASV (Pasif) modu zorunludur.
-            // Bunu açmazsan bağlantı kurulur ama dosya listesi gelmez (donar).
-            client.Config.DataConnectionMode = FtpDataConnectionMode.PASV;
-            
-            // Bağlantı zaman aşımını biraz uzatalım (15 saniye)
+            // Config nesnesi oluşturuluyor
             client.Config.ConnectTimeout = 15000;
             client.Config.ReadTimeout = 15000;
-
+            
+            // Pasif mod ayarı için bu satırı kaldırdık (Varsayılan zaten Pasif'tir)
+            // Eğer mutlaka belirtmek gerekirse Connect metodunda yapılır ama FluentFTP otomatiktir.
+            // İlla zorlamak için eski versiyonlardaki kod yerine şu anki config yapısı yeterlidir.
+            
             return client;
         }
 
         public async Task<bool> UploadFileAsync(IFormFile file, string remotePath)
         {
             using var client = CreateClient();
-            await client.Connect(); // Bağlan
+            // AutoConnect, en iyi bağlantı modunu (Pasif/Aktif) kendisi dener ve bulur.
+            await client.AutoConnect(); 
             
-            // Yolun sonuna / ekle ki dosya adıyla yapışmasın
             if (!remotePath.EndsWith("/")) remotePath += "/";
             string fullPath = remotePath + file.FileName;
 
             using var stream = file.OpenReadStream();
             try 
             {
-                // Dosyayı yükle (Varsa üzerine yaz)
                 await client.UploadStream(stream, fullPath, FtpRemoteExists.Overwrite, true);
                 return true;
             }
@@ -74,17 +73,15 @@ namespace FtpWebApiProject.Services
         public async Task<List<FtpFileItem>> ListFilesAsync(string remotePath)
         {
             using var client = CreateClient();
-            await client.Connect();
+            // AutoConnect kullanımı hayat kurtarır (DriveHQ için en iyisi)
+            await client.AutoConnect();
             
-            // Tüm listeyi çek
             var items = await client.GetListing(remotePath);
-            
             var fileList = new List<FtpFileItem>();
 
             foreach (var item in items)
             {
-                // Sadece DOSYALARI filtrele (Klasörleri gösterme)
-                // FluentFTP yeni sürümlerinde FtpObjectType kullanılır
+                // Tip kontrolü (Güncel FluentFTP sürümüne uygun)
                 if (item.Type == FtpObjectType.File)
                 {
                     fileList.Add(new FtpFileItem
@@ -104,14 +101,11 @@ namespace FtpWebApiProject.Services
         public async Task<byte[]?> DownloadFileAsync(string fileName)
         {
             using var client = CreateClient();
-            await client.Connect();
+            await client.AutoConnect();
             
             try 
             {
-                // Dosya var mı kontrol et
                 if (!await client.FileExists(fileName)) return null;
-
-                // Dosyayı indir
                 var bytes = await client.DownloadBytes(fileName, CancellationToken.None);
                 return bytes;
             }
