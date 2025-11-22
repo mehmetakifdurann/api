@@ -1,65 +1,66 @@
 using FluentFTP;
+using FtpWebApiProject.Models; // Model klasörünün adı neyse onu yaz
 using Microsoft.Extensions.Options;
 
 namespace FtpWebApiProject.Services
 {
+    public interface IFtpService
+    {
+        Task<bool> UploadFileAsync(IFormFile file, string remotePath);
+        Task<List<string>> ListFilesAsync(string remotePath); // Basit listeleme
+        Task<byte[]> DownloadFileAsync(string fileName); // İndirme
+    }
+
     public class FtpService : IFtpService
     {
-        private readonly string _host;
-        private readonly string _user;
-        private readonly string _pass;
-        private readonly int _port;
+        private readonly FtpSettings _settings;
 
-        // appsettings.json'dan verileri çekiyoruz
-        public FtpService(IConfiguration config)
+        public FtpService(IOptions<FtpSettings> options)
         {
-            _host = config["FtpSettings:Host"]!;
-            _user = config["FtpSettings:User"]!;
-            _pass = config["FtpSettings:Password"]!;
-            _port = int.Parse(config["FtpSettings:Port"]!);
+            _settings = options.Value;
+        }
+
+        // Yardımcı metot: Bağlantı oluşturur
+        private AsyncFtpClient CreateClient()
+        {
+            return new AsyncFtpClient(_settings.Host, _settings.User, _settings.Password, _settings.Port);
         }
 
         public async Task<bool> UploadFileAsync(IFormFile file, string remotePath)
         {
-            try
-            {
-                // FTP İstemcisini oluştur
-                using var client = new AsyncFtpClient(_host, _user, _pass, _port);
-                
-                // Bağlan (Otomatik olarak SSL/TLS dener, smartFTP mantığı)
-                await client.Connect();
-
-                // Gelen dosyanın içeriğini Stream (akış) olarak al
-                using var stream = file.OpenReadStream();
-
-                // Yükleme işlemi:
-                // remotePath: "/public_html/resimler/resim.jpg" gibi olmalı
-                string fullPath = remotePath + "/" + file.FileName;
-
-                // Dosyayı yükle. FtpRemoteExists.Overwrite, dosya varsa üzerine yazar.
-                var status = await client.UploadStream(stream, fullPath, FtpRemoteExists.Overwrite, true);
-
-                await client.Disconnect();
-
-                return status == FtpStatus.Success;
-            }
-            catch (Exception ex)
-            {
-                // Hata olursa loglayabilirsin
-                Console.WriteLine($"FTP Hatası: {ex.Message}");
-                return false;
-            }
+            using var client = CreateClient();
+            await client.Connect();
+            
+            using var stream = file.OpenReadStream();
+            // Dosyayı yükle (Üstüne yazar)
+            var status = await client.UploadStream(stream, remotePath + file.FileName, FtpRemoteExists.Overwrite, true);
+            
+            await client.Disconnect();
+            return status == FtpStatus.Success;
         }
 
-        public async Task<IEnumerable<string>> ListFilesAsync(string remotePath)
+        public async Task<List<string>> ListFilesAsync(string remotePath)
         {
-            using var client = new AsyncFtpClient(_host, _user, _pass, _port);
+            using var client = CreateClient();
             await client.Connect();
             
             var items = await client.GetListing(remotePath);
+            var fileNames = items.Select(i => i.Name).ToList();
+            
             await client.Disconnect();
+            return fileNames;
+        }
 
-            return items.Select(x => x.Name);
+        public async Task<byte[]> DownloadFileAsync(string fileName)
+        {
+            using var client = CreateClient();
+            await client.Connect();
+
+            // Dosyayı byte array olarak indir
+            var bytes = await client.DownloadBytes(fileName, CancellationToken.None);
+            
+            await client.Disconnect();
+            return bytes;
         }
     }
 }
