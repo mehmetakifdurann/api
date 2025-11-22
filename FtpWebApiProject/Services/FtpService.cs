@@ -3,18 +3,18 @@ using Microsoft.Extensions.Options;
 
 namespace FtpWebApiProject.Services
 {
-    // Dosya bilgilerini tutacak yeni modelimiz
     public class FtpFileItem
     {
         public string Name { get; set; } = string.Empty;
         public long Size { get; set; }
         public DateTime ModifiedDate { get; set; }
+        public bool IsFolder { get; set; } // Klasör mü kontrolü
     }
 
     public interface IFtpService
     {
         Task<bool> UploadFileAsync(IFormFile file, string remotePath);
-        Task<List<FtpFileItem>> ListFilesAsync(string remotePath); // List<string> yerine List<FtpFileItem> yaptık
+        Task<List<FtpFileItem>> ListFilesAsync(string remotePath);
         Task<byte[]> DownloadFileAsync(string fileName);
     }
 
@@ -37,14 +37,25 @@ namespace FtpWebApiProject.Services
             using var client = CreateClient();
             await client.Connect();
             
+            // Yol düzeltme
             if (!remotePath.EndsWith("/")) remotePath += "/";
             string fullPath = remotePath + file.FileName;
 
             using var stream = file.OpenReadStream();
-            var status = await client.UploadStream(stream, fullPath, FtpRemoteExists.Overwrite, true);
-            
-            await client.Disconnect();
-            return status == FtpStatus.Success;
+            try 
+            {
+                await client.UploadStream(stream, fullPath, FtpRemoteExists.Overwrite, true);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Upload Hatası: " + ex.Message);
+                return false;
+            }
+            finally
+            {
+                await client.Disconnect();
+            }
         }
 
         public async Task<List<FtpFileItem>> ListFilesAsync(string remotePath)
@@ -52,19 +63,25 @@ namespace FtpWebApiProject.Services
             using var client = CreateClient();
             await client.Connect();
             
+            // Tüm listeyi al
             var items = await client.GetListing(remotePath);
             
-            // BURASI KRİTİK: Sadece dosyaları seçiyoruz (Klasörleri eliyoruz)
-            // Ve detaylı bilgileri (Boyut, Tarih) alıyoruz.
-            var fileList = items
-                .Where(i => i.Type == FtpFileSystemObjectType.File) 
-                .Select(i => new FtpFileItem 
-                { 
-                    Name = i.Name,
-                    Size = i.Size,
-                    ModifiedDate = i.Modified
-                })
-                .ToList();
+            var fileList = new List<FtpFileItem>();
+
+            foreach (var item in items)
+            {
+                // Sadece DOSYALARI al (Type == File)
+                if (item.Type == FtpFileSystemObjectType.File)
+                {
+                    fileList.Add(new FtpFileItem
+                    {
+                        Name = item.Name,
+                        Size = item.Size,
+                        ModifiedDate = item.Modified,
+                        IsFolder = false
+                    });
+                }
+            }
             
             await client.Disconnect();
             return fileList;
@@ -74,14 +91,28 @@ namespace FtpWebApiProject.Services
         {
             using var client = CreateClient();
             await client.Connect();
+            
+            Console.WriteLine($"İndirme İsteği Geldi: {fileName}");
+
             try 
             {
+                // Dosya var mı kontrol et
+                bool exists = await client.FileExists(fileName);
+                if (!exists) 
+                {
+                    Console.WriteLine("Dosya FTP'de bulunamadı!");
+                    return null;
+                }
+
+                // İndir
                 var bytes = await client.DownloadBytes(fileName, CancellationToken.None);
+                Console.WriteLine($"İndirme Başarılı: {bytes.Length} byte");
                 return bytes;
             }
-            catch
+            catch (Exception ex)
             {
-                return null; // Dosya yoksa veya hata olursa null döner
+                Console.WriteLine("FTP İndirme Hatası: " + ex.Message);
+                return null;
             }
             finally
             {
